@@ -1,0 +1,60 @@
+version: 2
+
+# Метаданные проекта
+project_name: lv
+before:
+  hooks:
+    - go mod tidy  # очистка зависимостей перед сборкой
+
+# Переменные окружения при сборке
+env:
+  - CGO_ENABLED=0  # статическая сборка
+
+# Настройка сборки
+builds:
+  - id: lv
+    main: .  # main.go в корне
+    ldflags:
+      - -s -w  # уменьшаем размер
+      - -X main.version={{.Version}}
+    flags:
+      - v
+      - -trimpath  # воспроизводимая сборка
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    binary: lv
+
+# Настройка архивов
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Включаем дополнительно
+    files:
+      - LICENSE
+      - README.md
+
+# Проверочные суммы
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# Changelog
+changelog:
+  sort: asc
+  groups:
+    - title: "New Features"
+      regexp: "^.*feat[(:].*$"
+    - title: "Bug Fixes"
+      regexp: "^.*fix[(:].*$"
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

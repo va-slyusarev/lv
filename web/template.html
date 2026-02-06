@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-просмотрщик логов v{{.Version}}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background-color: #f5f5f5;
+        }
+        
+        body {
+            color: #333;
+            line-height: 1.6;
+            padding: 10px;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        
+        .container {
+            height: 100%;
+            width: 100%;
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background-color: #404040;
+            color: white;
+            padding: 10px 20px;
+            border-bottom: 1px solid #505050;
+            flex-shrink: 0;
+        }
+        
+        .app-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .app-version {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            background-color: #505050;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        
+        .server-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+        
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #2ecc71;
+        }
+
+        .status-indicator.online {
+            background-color: #2ecc71;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.offline {
+            background-color: #e74c3c;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .server-params {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 5px;
+            font-size: 0.75rem;
+            color: #aaa;
+        }
+        
+        .param-item {
+            background-color: #505050;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .param-icon {
+            font-size: 0.8em;
+        }
+
+        .last-check {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-left: 8px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+            position: relative;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .loading-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        .files-panel {
+            width: 300px;
+            background-color: #f8f8f8;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .files-panel.collapsed {
+            width: 40px;
+        }
+
+        .files-panel.collapsed .files-header-content,
+        .files-panel.collapsed .files-list-container {
+            display: none;
+        }
+        
+        .files-header {
+            padding: 10px 15px;
+            background-color: #606060;
+            color: white;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 40px;
+            position: relative;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .files-header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .files-header-collapsed {
+            display: none;
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .files-panel.collapsed .files-header-collapsed {
+            display: flex;
+        }
+
+        .files-panel.collapsed .files-header-content {
+            display: none;
+        }
+
+        .toggle-files-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 4px 8px;
+            border-radius: 3px;
+            transition: background-color 0.2s, transform 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        .toggle-files-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .toggle-files-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .files-panel.collapsed .toggle-files-btn {
+            margin: 0 auto;
+        }
+        
+        .files-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 5px 10px;
+            background-color: #707070;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover:not(:disabled) {
+            background-color: #808080;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-success {
+            background-color: #5a7d5a;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background-color: #6a8d6a;
+        }
+
+        .btn-info {
+            background-color: #3498db;
+        }
+        
+        .btn-info:hover:not(:disabled) {
+            background-color: #2980b9;
+        }
+        
+        .files-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 5px;
+            transition: opacity 0.3s;
+            min-height: 0;
+        }
+
+        .files-panel.collapsed .files-list-container {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .files-list {
+            list-style-type: none;
+        }
+        
+        .directory-item {
+            padding: 6px 5px 3px 5px;
+            color: #555;
+            font-weight: 600;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #ddd;
+            margin-top: 6px;
+            background-color: #e8e8e8;
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .directory-toggle {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 2px 5px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .directory-toggle:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .directory-files {
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+        }
+
+        .directory-item.collapsed + .directory-files {
+            max-height: 0;
+        }
+        
+        .directory-item:first-child {
+            margin-top: 0;
+        }
+        
+        .file-item {
+            padding: 6px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .file-item:hover:not(.disabled) {
+            background-color: #e8f0f8;
+        }
+        
+        .file-item.active {
+            background-color: #707070;
+            color: white;
+        }
+        
+        .file-item.disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+        
+        .file-info {
+            flex: 1;
+            overflow: hidden;
+            min-width: 0;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .file-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 0.7rem;
+            color: #888;
+        }
+        
+        .file-item.active .file-meta {
+            color: #ccc;
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .download-btn {
+            background-color: #5a7d5a;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            padding: 3px 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .download-btn:hover {
+            background-color: #6a8d6a;
+        }
+        
+        .file-item.active .download-btn {
+            background-color: #8aab8a;
+        }
+        
+        .log-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+        
+        .log-header {
+            padding: 10px 15px;
+            background-color: #606060;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .log-title {
+            font-weight: 500;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .log-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .nav-btn {
+            padding: 5px 8px;
+            background-color: #707070;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        
+        .nav-btn:hover:not(:disabled) {
+            background-color: #808080;
+        }
+        
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .auto-refresh-control {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            white-space: nowrap;
+        }
+        
+        .interval-input {
+            width: 45px;
+            padding: 3px;
+            border: 1px solid #808080;
+            border-radius: 3px;
+            background-color: #505050;
+            color: white;
+            text-align: center;
+            font-size: 0.75rem;
+        }
+        
+        .interval-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .interval-input:focus {
+            outline: none;
+            border-color: #909090;
+        }
+        
+        .log-content-container {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: #d0d0d0;
+            position: relative;
+            min-height: 0;
+        }
+        
+        .log-content {
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.75rem;
+            white-space: pre;
+            line-height: 1.3;
+            min-width: 100%;
+            display: inline-block;
+        }
+        
+        .log-line {
+            display: flex;
+            min-height: 16px;
+            user-select: text;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-radius: 2px;
+            margin: 1px 0;
+        }
+
+        .log-line:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .line-number {
+            color: #6a9955;
+            min-width: 45px;
+            padding-right: 10px;
+            text-align: right;
+            user-select: none;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: color 0.2s, background-color 0.2s;
+            border-radius: 2px;
+            padding-left: 3px;
+        }
+        
+        .line-number:hover {
+            background-color: rgba(106, 153, 85, 0.2);
+            color: #8bc34a;
+        }
+        
+        .line-content {
+            white-space: pre;
+            flex: 1;
+            user-select: text;
+            padding-right: 3px;
+        }
+        
+        .stats {
+            padding: 6px 12px;
+            background-color: #f8f8f8;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.75rem;
+            color: #555;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        .stats-info {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .stats-refresh {
+            flex-shrink: 0;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            text-align: center;
+            padding: 30px 15px;
+        }
+        
+        .empty-state-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #707070;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Модальное окно для строки лога */
+        .line-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .line-dialog-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .line-dialog {
+            background-color: #2c3e50;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 5px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dialog-header {
+            background-color: #34495e;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #404b5a;
+        }
+
+        .dialog-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dialog-close {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1.3rem;
+            cursor: pointer;
+            padding: 0;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .dialog-close:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .dialog-content {
+            padding: 15px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .dialog-section {
+            margin-bottom: 15px;
+        }
+
+        .dialog-section-title {
+            font-size: 0.85rem;
+            color: #95a5a6;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .raw-line-content {
+            background-color: #1a1a1a;
+            border: 1px solid #404b5a;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.8rem;
+            color: #d0d0d0;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+        }
+
+        .json-viewer {
+            background-color: #1a1a1a;
+            border: 1px solid #404b5a;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.8rem;
+            color: #d0d0d0;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .json-key {
+            color: #9cdcfe;
+        }
+
+        .json-string {
+            color: #ce9178;
+        }
+
+        .json-number {
+            color: #b5cea8;
+        }
+
+        .json-boolean {
+            color: #569cd6;
+        }
+
+        .json-null {
+            color: #569cd6;
+        }
+
+        .copy-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .copy-btn {
+            padding: 6px 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background-color 0.2s;
+        }
+
+        .copy-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .copy-btn.success {
+            background-color: #27ae60;
+        }
+
+        .copy-btn.success:hover {
+            background-color: #219653;
+        }
+
+        .copy-btn.success::after {
+            content: "✓";
+            margin-left: 5px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .no-json-message {
+            color: #95a5a6;
+            font-style: italic;
+            text-align: center;
+            padding: 15px;
+        }
+
+        .encoding-badge {
+            background-color: #9b59b6;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.65rem;
+            margin-left: 3px;
+        }
+
+        .no-file-selected {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            text-align: center;
+            padding: 30px 15px;
+        }
+
+        .no-file-selected-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        
+        .preview-warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            font-size: 0.8rem;
+            border-radius: 3px;
+            white-space: pre-wrap;
+        }
+        
+        .security-warning {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            max-width: 300px;
+            z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        @media (max-width: 900px) {
+            body {
+                padding: 5px;
+            }
+            
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .files-panel {
+                width: 100%;
+                height: 250px;
+            }
+
+            .files-panel.collapsed {
+                width: 100%;
+                height: 40px;
+            }
+
+            .files-panel.collapsed .files-list-container {
+                display: none;
+            }
+
+            .server-params {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .line-dialog {
+                width: 95%;
+                max-height: 80vh;
+            }
+
+            .copy-buttons {
+                flex-direction: column;
+            }
+            
+            .log-controls {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="app-title">
+                <span>Web-просмотрщик логов</span>
+                <span class="app-version">v{{.Version}}</span>
+            </div>
+            <div class="server-info">
+                <div class="server-status">
+                    <div id="status-indicator" class="status-indicator online"></div>
+                    <span id="server-status-text">Сервер доступен</span>
+                    <span id="last-check" class="last-check">(проверено только что)</span>
+                </div>
+            </div>
+            <div class="server-params">
+                <div class="param-item">
+                    <span class="param-icon">📁</span>
+                    <span>Каталог: {{.LogDirectory}}</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-icon">📏</span>
+                    <span>Лимит предпросмотра: {{.PreviewSizeMB}} МБ</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-icon">🔤</span>
+                    <span>Кодировка: {{.Encoding}}</span>
+                    <span class="encoding-badge">{{.Encoding}}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <!-- Оверлей загрузки -->
+            <div class="loading-overlay" id="loading-overlay">
+                <div class="loading-content">
+                    <div class="loading"></div>
+                    <div style="margin-top: 10px; font-size: 0.9rem;">Загрузка...</div>
+                </div>
+            </div>
+            
+            <div class="files-panel" id="files-panel">
+                <div class="files-header">
+                    <div class="files-header-content">
+                        <div>Файлы логов</div>
+                        <div class="files-controls">
+                            <button id="refresh-files-btn" class="btn btn-success">Обновить</button>
+                            <button class="toggle-files-btn" id="toggle-files-btn" title="Свернуть панель">◀</button>
+                        </div>
+                    </div>
+                    <div class="files-header-collapsed">
+                        <button class="toggle-files-btn" id="toggle-files-btn-collapsed" title="Развернуть панель">▶</button>
+                    </div>
+                </div>
+                <div class="files-list-container">
+                    <ul id="files-list" class="files-list">
+                        <li style="padding: 15px; text-align: center;">
+                            <div class="loading"></div>
+                            <div style="margin-top: 8px; font-size: 0.75rem; color: #666;">Загрузка списка файлов...</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="log-panel">
+                <div class="log-header">
+                    <div class="log-title" id="selected-file-name">Выберите файл для просмотра</div>
+                    <div class="log-controls">
+                        <button id="go-top-btn" class="nav-btn" title="В начало файла" disabled>↑ Начало</button>
+                        <button id="go-bottom-btn" class="nav-btn" title="В конец файла" disabled>↓ Конец</button>
+                        <div class="auto-refresh-control">
+                            <input type="number" id="refresh-interval" class="interval-input" value="5" min="1" max="60" disabled>
+                            <span style="font-size: 0.75rem;">сек</span>
+                            <button id="auto-refresh-file-btn" class="btn" disabled>Автообновление</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="log-content-container">
+                    <div id="log-content" class="log-content">
+                        <div class="no-file-selected">
+                            <div class="no-file-selected-icon">📄</div>
+                            <h3>Файл не выбран</h3>
+                            <p>Выберите файл логов из списка в левой панели</p>
+                            <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">
+                                <small>Нажмите на файл в списке, чтобы просмотреть его содержимое</small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats">
+                    <div class="stats-info" id="stats-info">
+                        Ожидание выбора файла | Лимит предпросмотра: {{.PreviewSizeMB}} МБ | Кодировка: {{.Encoding}}
+                    </div>
+                    <div class="stats-refresh" id="auto-refresh-status">
+                        Автообновление: выключено
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отображения строки -->
+    <div class="line-dialog-overlay" id="line-dialog-overlay">
+        <div class="line-dialog">
+            <div class="dialog-header">
+                <div class="dialog-title">
+                    <span>📝</span>
+                    <span id="dialog-line-title">Строка #0</span>
+                </div>
+                <button class="dialog-close" id="dialog-close-btn">×</button>
+            </div>
+            <div class="dialog-content">
+                <div class="dialog-section">
+                    <div class="dialog-section-title">Исходная строка:</div>
+                    <div class="raw-line-content" id="raw-line-content"></div>
+                </div>
+                
+                <div class="dialog-section">
+                    <div class="dialog-section-title">Форматированный JSON:</div>
+                    <div class="json-viewer" id="json-viewer">
+                        <div class="no-json-message" id="no-json-message">
+                            В строке не обнаружен JSON
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="copy-buttons">
+                    <button class="copy-btn" id="copy-raw-btn">
+                        📋 Копировать исходный текст
+                    </button>
+                    <button class="copy-btn" id="copy-json-btn">
+                        📋 Копировать форматированный JSON
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // КОНСТАНТЫ И КОНФИГУРАЦИЯ
+        // ============================================================================
+        
+        // Конфигурация загружается с сервера
+        let PREVIEW_SIZE = {{.PreviewSize}};
+        let PREVIEW_SIZE_MB = {{.PreviewSizeMB}};
+        let CURRENT_ENCODING = "{{.Encoding}}";
+        let SERVER_BASE_URL = window.location.origin;
+        let SERVER_CONNECTED = true;
+        
+        // DOM элементы
+        const selectedFileNameElement = document.getElementById('selected-file-name');
+        const filesListElement = document.getElementById('files-list');
+        const filesPanel = document.getElementById('files-panel');
+        const toggleFilesBtn = document.getElementById('toggle-files-btn');
+        const toggleFilesBtnCollapsed = document.getElementById('toggle-files-btn-collapsed');
+        const logContentElement = document.getElementById('log-content');
+        const refreshFilesBtn = document.getElementById('refresh-files-btn');
+        const autoRefreshFileBtn = document.getElementById('auto-refresh-file-btn');
+        const refreshIntervalInput = document.getElementById('refresh-interval');
+        const goTopBtn = document.getElementById('go-top-btn');
+        const goBottomBtn = document.getElementById('go-bottom-btn');
+        const statsInfoElement = document.getElementById('stats-info');
+        const autoRefreshStatusElement = document.getElementById('auto-refresh-status');
+        const statusIndicator = document.getElementById('status-indicator');
+        const serverStatusText = document.getElementById('server-status-text');
+        const lastCheckElement = document.getElementById('last-check');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        
+        // Элементы модального окна
+        const lineDialogOverlay = document.getElementById('line-dialog-overlay');
+        const dialogCloseBtn = document.getElementById('dialog-close-btn');
+        const dialogLineTitle = document.getElementById('dialog-line-title');
+        const rawLineContent = document.getElementById('raw-line-content');
+        const jsonViewer = document.getElementById('json-viewer');
+        const noJsonMessage = document.getElementById('no-json-message');
+        const copyRawBtn = document.getElementById('copy-raw-btn');
+        const copyJsonBtn = document.getElementById('copy-json-btn');
+        
+        // ============================================================================
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+        // ============================================================================
+        
+        let currentFile = null;
+        let currentFilePath = null;
+        let currentFileSize = null;
+        let autoRefreshInterval = null;
+        let autoRefreshEnabled = false;
+        let healthCheckInterval = null;
+        let fileListData = [];
+        let currentDialogLineNumber = 0;
+        let currentDialogLineContent = '';
+        let copySuccessTimeout = null;
+        let collapsedDirectories = new Set();
+        let lastFileClickTime = 0;
+        let isFileLoading = false;
+        
+        // Константы
+        const FILE_CLICK_DEBOUNCE = 300; // 300ms для защиты от двойных кликов
+        const HEALTH_CHECK_INTERVAL = 60000; // 60 секунд для проверки сервера
+        const SCROLL_TO_END_DELAY = 100; // Задержка для прокрутки в конец файла
+        
+        // ============================================================================
+        // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+        // ============================================================================
+        
+        /**
+         * Инициализация приложения при загрузке страницы
+         */
+        function init() {
+            // Сбрасываем выбранный файл при загрузке/обновлении
+            resetFileSelection();
+            
+            // Загружаем список файлов
+            loadFileList();
+            
+            // Запускаем периодическую проверку здоровья сервера
+            startHealthCheck();
+            
+            // Настройка обработчиков событий
+            setupEventListeners();
+            
+            // Проверяем и инициализируем возможности копирования
+            initCopyCapabilities();
+            
+            // Восстанавливаем состояние панели файлов
+            restoreFilesPanelState();
+            restoreCollapsedDirectories();
+            
+            // Отключаем кнопки навигации пока файл не выбран
+            updateNavigationButtons(false);
+        }
+        
+        // ============================================================================
+        // УПРАВЛЕНИЕ СОСТОЯНИЕМ СЕРВЕРА
+        // ============================================================================
+        
+        /**
+         * Запуск периодической проверки доступности сервера
+         */
+        function startHealthCheck() {
+            // Проверяем состояние сервера сразу при старте
+            checkServerHealth();
+            
+            // Устанавливаем периодическую проверку
+            healthCheckInterval = setInterval(checkServerHealth, HEALTH_CHECK_INTERVAL);
+        }
+        
+        /**
+         * Проверка состояния сервера через API health
+         * @returns {Promise<void>}
+         */
+        async function checkServerHealth() {
+            try {
+                const response = await fetch(`${SERVER_BASE_URL}/api/health`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateServerStatus(true, data);
+                } else {
+                    updateServerStatus(false, { error: `HTTP ${response.status}` });
+                }
+            } catch (error) {
+                updateServerStatus(false, { error: error.message });
+            }
+        }
+        
+        /**
+         * Обновление отображения статуса сервера
+         * @param {boolean} isConnected - Статус подключения
+         * @param {Object} data - Данные от сервера
+         */
+        function updateServerStatus(isConnected, data) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            
+            SERVER_CONNECTED = isConnected;
+            
+            if (isConnected) {
+                statusIndicator.className = 'status-indicator online';
+                serverStatusText.textContent = 'Сервер доступен';
+                lastCheckElement.textContent = `(проверено: ${timeStr})`;
+                
+                // Обновляем информацию о сервере из данных health
+                if (data.previewSize) {
+                    PREVIEW_SIZE = data.previewSize;
+                    PREVIEW_SIZE_MB = (PREVIEW_SIZE / (1024 * 1024)).toFixed(2);
+                }
+                
+                if (data.encoding) {
+                    CURRENT_ENCODING = data.encoding;
+                }
+                
+                // Обновляем статистику
+                updateStatsInfo();
+            } else {
+                statusIndicator.className = 'status-indicator offline';
+                serverStatusText.textContent = 'Сервер недоступен';
+                lastCheckElement.textContent = `(последняя проверка: ${timeStr})`;
+                
+                if (autoRefreshEnabled) {
+                    disableAutoRefresh();
+                }
+            }
+        }
+        
+        // ============================================================================
+        // УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ
+        // ============================================================================
+        
+        /**
+         * Установка состояния загрузки для интерфейса
+         * @param {boolean} isLoading - Флаг загрузки
+         */
+        function setInterfaceLoading(isLoading) {
+            if (isLoading) {
+                loadingOverlay.classList.add('active');
+                // Блокируем основные элементы управления
+                refreshFilesBtn.disabled = true;
+                toggleFilesBtn.disabled = true;
+                toggleFilesBtnCollapsed.disabled = true;
+                goTopBtn.disabled = true;
+                goBottomBtn.disabled = true;
+                autoRefreshFileBtn.disabled = true;
+                refreshIntervalInput.disabled = true;
+                
+                // Блокируем все файлы в списке
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.classList.add('disabled');
+                });
+            } else {
+                loadingOverlay.classList.remove('active');
+                // Разблокируем кнопки в зависимости от состояния
+                refreshFilesBtn.disabled = false;
+                toggleFilesBtn.disabled = false;
+                toggleFilesBtnCollapsed.disabled = false;
+                
+                // Разблокируем кнопки навигации если файл выбран
+                const hasSelectedFile = !!currentFilePath;
+                goTopBtn.disabled = !hasSelectedFile;
+                goBottomBtn.disabled = !hasSelectedFile;
+                autoRefreshFileBtn.disabled = !hasSelectedFile;
+                refreshIntervalInput.disabled = !hasSelectedFile;
+                
+                // Разблокируем файлы в списке
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.classList.remove('disabled');
+                });
+            }
+            isFileLoading = isLoading;
+        }
+        
+        /**
+         * Обновление состояния кнопок навигации
+         * @param {boolean} enabled - Включены или отключены
+         */
+        function updateNavigationButtons(enabled) {
+            goTopBtn.disabled = !enabled;
+            goBottomBtn.disabled = !enabled;
+            autoRefreshFileBtn.disabled = !enabled;
+            refreshIntervalInput.disabled = !enabled;
+        }
+        
+        /**
+         * Сброс выбранного файла и состояния интерфейса
+         */
+        function resetFileSelection() {
+            currentFile = null;
+            currentFilePath = null;
+            currentFileSize = null;
+            
+            // Снимаем выделение со всех файлов
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Сбрасываем заголовок
+            selectedFileNameElement.textContent = 'Выберите файл для просмотра';
+            
+            // Показываем состояние "файл не выбран"
+            logContentElement.innerHTML = `
+                <div class="no-file-selected">
+                    <div class="no-file-selected-icon">📄</div>
+                    <h3>Файл не выбран</h3>
+                    <p>Выберите файл логов из списка в левой панели</p>
+                    <p style="margin-top: 10px; font-size: 0.8rem; color: #666;">
+                        <small>Нажмите на файл в списке, чтобы просмотреть его содержимое</small>
+                    </p>
+                </div>
+            `;
+            
+            // Обновляем статистику
+            updateStatsInfo();
+            
+            // Отключаем кнопки навигации
+            updateNavigationButtons(false);
+        }
+        
+        /**
+         * Обновление информации в статистике
+         */
+        function updateStatsInfo() {
+            if (currentFile) {
+                statsInfoElement.textContent = `Файл: ${currentFile} | Лимит предпросмотра: ${PREVIEW_SIZE_MB} МБ | Кодировка: ${CURRENT_ENCODING}`;
+            } else {
+                statsInfoElement.textContent = `Ожидание выбора файла | Лимит предпросмотра: ${PREVIEW_SIZE_MB} МБ | Кодировка: ${CURRENT_ENCODING}`;
+            }
+        }
+        
+        // ============================================================================
+        // РАБОТА С БУФЕРОМ ОБМЕНА
+        // ============================================================================
+        
+        /**
+         * Инициализация возможностей копирования
+         */
+        function initCopyCapabilities() {
+            if (!isSecureContext()) {
+                console.warn('Приложение работает в небезопасном контексте. Копирование может быть ограничено.');
+                // Показываем предупреждение пользователю
+                showSecurityWarningIfNeeded();
+            }
+        }
+        
+        /**
+         * Проверка безопасного контекста (HTTPS или localhost)
+         * @returns {boolean} Находимся ли в безопасном контексте
+         */
+        function isSecureContext() {
+            return window.isSecureContext || 
+                   window.location.protocol === 'https:' || 
+                   window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' ||
+                   window.location.hostname === '[::1]';
+        }
+        
+        /**
+         * Показать предупреждение о безопасности если нужно
+         */
+        function showSecurityWarningIfNeeded() {
+            // Не показываем слишком часто
+            if (localStorage.getItem('securityWarningShown')) {
+                return;
+            }
+            
+            if (!isSecureContext() && window.location.hostname !== 'localhost' && 
+                window.location.hostname !== '127.0.0.1' && window.location.hostname !== '[::1]') {
+                
+                const warning = document.createElement('div');
+                warning.className = 'security-warning';
+                
+                warning.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">⚠️ Внимание</div>
+                    <div>Для работы копирования в буфер обмена рекомендуется использовать HTTPS соединение.</div>
+                    <button onclick="this.parentElement.style.display='none'; localStorage.setItem('securityWarningShown', 'true');" 
+                            style="margin-top: 8px; padding: 3px 10px; background-color: #ffc107; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75rem;">
+                        Понятно
+                    </button>
+                `;
+                
+                document.body.appendChild(warning);
+                
+                // Автоматически скрыть через 10 секунд
+                setTimeout(() => {
+                    if (warning.parentElement) {
+                        warning.style.display = 'none';
+                    }
+                }, 10000);
+            }
+        }
+        
+        /**
+         * Копирование текста в буфер обмена с fallback-методами
+         * @param {string} text - Текст для копирования
+         * @param {HTMLElement} button - Кнопка для отображения состояния
+         * @returns {Promise<void>}
+         */
+        async function copyToClipboard(text, button) {
+            try {
+                // Способ 1: Современный API (работает в безопасных контекстах)
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } 
+                // Способ 2: Документо-ориентированный метод (старый, но работает)
+                else {
+                    await copyUsingDocumentExecCommand(text);
+                }
+                
+                // Показываем успешное состояние кнопки
+                button.classList.add('success');
+                
+                // Сбрасываем предыдущий таймаут
+                if (copySuccessTimeout) {
+                    clearTimeout(copySuccessTimeout);
+                }
+                
+                // Сбрасываем состояние кнопки через время
+                copySuccessTimeout = setTimeout(() => {
+                    button.classList.remove('success');
+                }, 2000);
+                
+            } catch (err) {
+                console.error('Ошибка копирования:', err);
+                
+                // Способ 3: Показать текст в модальном окне для ручного копирования
+                showCopyFallbackDialog(text);
+            }
+        }
+        
+        /**
+         * Копирование с использованием document.execCommand (старый метод)
+         * @param {string} text - Текст для копирования
+         * @returns {Promise<void>}
+         */
+        function copyUsingDocumentExecCommand(text) {
+            return new Promise((resolve, reject) => {
+                try {
+                    // Создаем временный textarea элемент
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    
+                    // Выделяем текст
+                    textArea.focus();
+                    textArea.select();
+                    
+                    // Пытаемся скопировать
+                    const successful = document.execCommand('copy');
+                    
+                    // Удаляем временный элемент
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error('Не удалось выполнить команду копирования'));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+        
+        /**
+         * Показать диалог для ручного копирования текста
+         * @param {string} text - Текст для копирования
+         */
+        function showCopyFallbackDialog(text) {
+            // Создаем диалоговое окно для ручного копирования
+            const fallbackDialog = document.createElement('div');
+            fallbackDialog.className = 'fallback-copy-dialog';
+            fallbackDialog.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+                z-index: 2000;
+                max-width: 90%;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column;
+                min-width: 300px;
+            `;
+            
+            fallbackDialog.innerHTML = `
+                <div style="margin-bottom: 15px; font-weight: bold; color: #333;">
+                    Скопируйте текст вручную
+                </div>
+                <textarea id="fallback-copy-textarea" 
+                          style="width: 100%; height: 150px; padding: 10px; 
+                                 border: 1px solid #ddd; border-radius: 4px;
+                                 font-family: 'Consolas', monospace; font-size: 0.9rem;
+                                 resize: vertical; margin-bottom: 15px;">
+                    ${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                </textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button id="fallback-copy-btn" 
+                            style="padding: 8px 16px; background-color: #3498db; 
+                                   color: white; border: none; border-radius: 4px;
+                                   cursor: pointer;">
+                        Выделить и копировать
+                    </button>
+                    <button id="fallback-close-btn" 
+                            style="padding: 8px 16px; background-color: #e74c3c; 
+                                   color: white; border: none; border-radius: 4px;
+                                   cursor: pointer;">
+                        Закрыть
+                    </button>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.8rem; color: #666;">
+                    <small>Нажмите на текст выше, затем Ctrl+C (Cmd+C на Mac)</small>
+                </div>
+            `;
+            
+            // Добавляем оверлей
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0,0,0,0.7);
+                z-index: 1999;
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(fallbackDialog);
+            
+            // Фокусируем и выделяем текст в textarea
+            const textarea = document.getElementById('fallback-copy-textarea');
+            setTimeout(() => {
+                textarea.focus();
+                textarea.select();
+            }, 100);
+            
+            // Обработчики событий
+            document.getElementById('fallback-copy-btn').onclick = () => {
+                textarea.focus();
+                textarea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        alert('Текст скопирован в буфер обмена!');
+                    }
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                }
+            };
+            
+            document.getElementById('fallback-close-btn').onclick = () => {
+                document.body.removeChild(overlay);
+                document.body.removeChild(fallbackDialog);
+            };
+            
+            overlay.onclick = () => {
+                document.body.removeChild(overlay);
+                document.body.removeChild(fallbackDialog);
+            };
+        }
+        
+        // ============================================================================
+        // МОДАЛЬНОЕ ОКНО ДЛЯ СТРОКИ ЛОГА
+        // ============================================================================
+        
+        /**
+         * Показать модальное окно с деталями строки лога
+         * @param {number} lineNumber - Номер строки
+         * @param {string} lineContent - Содержимое строки
+         */
+        function showLineDialog(lineNumber, lineContent) {
+            currentDialogLineNumber = lineNumber;
+            currentDialogLineContent = lineContent;
+            
+            // Обновляем заголовок
+            dialogLineTitle.textContent = `Строка #${lineNumber}`;
+            
+            // Отображаем исходную строку
+            rawLineContent.textContent = lineContent;
+            
+            // Пытаемся найти и отформатировать JSON
+            const jsonData = tryParseJson(lineContent);
+            
+            if (jsonData) {
+                // Скрываем сообщение об отсутствии JSON
+                noJsonMessage.style.display = 'none';
+                
+                // Форматируем и отображаем JSON с подсветкой синтаксиса
+                const formattedJson = formatJsonWithSyntaxHighlighting(jsonData);
+                jsonViewer.innerHTML = formattedJson;
+                jsonViewer.style.display = 'block';
+                
+                // Показываем кнопку копирования JSON
+                copyJsonBtn.style.display = 'flex';
+            } else {
+                // Показываем сообщение об отсутствии JSON
+                noJsonMessage.style.display = 'block';
+                jsonViewer.style.display = 'none';
+                
+                // Скрываем кнопку копирования JSON
+                copyJsonBtn.style.display = 'none';
+            }
+            
+            // Сбрасываем состояние кнопок копирования
+            copyRawBtn.classList.remove('success');
+            copyJsonBtn.classList.remove('success');
+            
+            // Показываем модальное окно
+            lineDialogOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        /**
+         * Скрыть модальное окно
+         */
+        function hideLineDialog() {
+            lineDialogOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+            
+            // Сбрасываем состояние кнопок копирования
+            if (copySuccessTimeout) {
+                clearTimeout(copySuccessTimeout);
+                copySuccessTimeout = null;
+            }
+        }
+        
+        /**
+         * Попытка распарсить JSON из строки лога
+         * @param {string} str - Строка для анализа
+         * @returns {Object|null} Распарсенный JSON или null
+         */
+        function tryParseJson(str) {
+            try {
+                // Ищем JSON в строке (может быть частью строки лога)
+                const jsonStart = str.indexOf('{');
+                const jsonEnd = str.lastIndexOf('}');
+                
+                if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                    const jsonStr = str.substring(jsonStart, jsonEnd + 1);
+                    return JSON.parse(jsonStr);
+                }
+                
+                // Пробуем распарсить всю строку как JSON
+                return JSON.parse(str);
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        /**
+         * Форматирование JSON с подсветкой синтаксиса
+         * @param {Object} obj - Объект JSON
+         * @returns {string} Отформатированный HTML
+         */
+        function formatJsonWithSyntaxHighlighting(obj) {
+            const jsonStr = JSON.stringify(obj, null, 2);
+            
+            // Подсветка синтаксиса JSON
+            return jsonStr.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+                function(match) {
+                    let cls = 'json-number';
+                    if (/^"/.test(match)) {
+                        if (/:$/.test(match)) {
+                            cls = 'json-key';
+                        } else {
+                            cls = 'json-string';
+                        }
+                    } else if (/true|false/.test(match)) {
+                        cls = 'json-boolean';
+                    } else if (/null/.test(match)) {
+                        cls = 'json-null';
+                    }
+                    return `<span class="${cls}">${match}</span>`;
+                }
+            );
+        }
+        
+        // ============================================================================
+        // НАСТРОЙКА ОБРАБОТЧИКОВ СОБЫТИЙ
+        // ============================================================================
+        
+        /**
+         * Настройка всех обработчиков событий
+         */
+        function setupEventListeners() {
+            // Кнопка обновления списка файлов
+            refreshFilesBtn.addEventListener('click', loadFileList);
+            
+            // Кнопки автообновления и навигации
+            autoRefreshFileBtn.addEventListener('click', toggleAutoRefreshFile);
+            goTopBtn.addEventListener('click', scrollToTop);
+            goBottomBtn.addEventListener('click', scrollToBottom);
+            
+            // Кнопки свертывания/развертывания панели файлов
+            toggleFilesBtn.addEventListener('click', toggleFilesPanel);
+            toggleFilesBtnCollapsed.addEventListener('click', toggleFilesPanel);
+            
+            // Закрытие модального окна
+            dialogCloseBtn.addEventListener('click', hideLineDialog);
+            lineDialogOverlay.addEventListener('click', (e) => {
+                if (e.target === lineDialogOverlay) hideLineDialog();
+            });
+            
+            // Кнопки копирования в модальном окне
+            copyRawBtn.addEventListener('click', () => {
+                copyToClipboard(currentDialogLineContent, copyRawBtn);
+            });
+            
+            copyJsonBtn.addEventListener('click', () => {
+                const jsonData = tryParseJson(currentDialogLineContent);
+                if (jsonData) {
+                    const formattedJson = JSON.stringify(jsonData, null, 2);
+                    copyToClipboard(formattedJson, copyJsonBtn);
+                }
+            });
+            
+            // Закрытие модального окна по Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && lineDialogOverlay.classList.contains('active')) {
+                    hideLineDialog();
+                }
+            });
+            
+            // Валидация интервала автообновления
+            refreshIntervalInput.addEventListener('change', function() {
+                let value = parseInt(this.value);
+                if (value < 1) this.value = 1;
+                if (value > 60) this.value = 60;
+                
+                // Если автообновление включено, перезапускаем с новым интервалом
+                if (autoRefreshEnabled) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = setInterval(autoRefreshFile, value * 1000);
+                    updateAutoRefreshStatus();
+                }
+            });
+        }
+        
+        /**
+         * Свернуть/развернуть панель файлов
+         */
+        function toggleFilesPanel() {
+            filesPanel.classList.toggle('collapsed');
+            
+            // Обновляем заголовки кнопок
+            const isCollapsed = filesPanel.classList.contains('collapsed');
+            
+            toggleFilesBtn.title = isCollapsed ? 'Развернуть панель' : 'Свернуть панель';
+            toggleFilesBtnCollapsed.title = isCollapsed ? 'Развернуть панель' : 'Свернуть панель';
+            
+            // Меняем направление стрелок
+            toggleFilesBtn.textContent = isCollapsed ? '▶' : '◀';
+            toggleFilesBtnCollapsed.textContent = isCollapsed ? '▶' : '◀';
+            
+            // Сохраняем состояние в localStorage
+            localStorage.setItem('filesPanelCollapsed', isCollapsed);
+        }
+        
+        /**
+         * Восстановить состояние панели файлов из localStorage
+         */
+        function restoreFilesPanelState() {
+            const wasCollapsed = localStorage.getItem('filesPanelCollapsed') === 'true';
+            if (wasCollapsed) {
+                filesPanel.classList.add('collapsed');
+                toggleFilesBtn.title = 'Развернуть панель';
+                toggleFilesBtnCollapsed.title = 'Развернуть панель';
+                toggleFilesBtn.textContent = '▶';
+                toggleFilesBtnCollapsed.textContent = '▶';
+            }
+        }
+        
+        // ============================================================================
+        // РАБОТА С ФАЙЛАМИ И КАТАЛОГАМИ
+        // ============================================================================
+        
+        /**
+         * Загрузка списка файлов с сервера
+         * @returns {Promise<void>}
+         */
+        async function loadFileList() {
+            // Сбрасываем выбранный файл при обновлении списка
+            resetFileSelection();
+            
+            // Показываем индикатор загрузки
+            filesListElement.innerHTML = '<li style="padding: 15px; text-align: center;"><div class="loading"></div><div style="margin-top: 8px; font-size: 0.75rem; color: #666;">Загрузка списка файлов...</div></li>';
+            
+            // Блокируем кнопку обновления до получения ответа
+            refreshFilesBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${SERVER_BASE_URL}/api/files`);
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                fileListData = data.files || [];
+                displayFileList(fileListData);
+                
+            } catch (error) {
+                console.error('Ошибка загрузки списка файлов:', error);
+                filesListElement.innerHTML = `<li style="padding: 15px; text-align: center; color: #d32f2f; font-size: 0.8rem;">
+                    Ошибка загрузки: ${error.message}
+                </li>`;
+            } finally {
+                // Разблокируем кнопку обновления после получения ответа
+                refreshFilesBtn.disabled = false;
+            }
+        }
+        
+        /**
+         * Отображение списка файлов с группировкой по каталогам
+         * @param {Array} files - Массив файлов
+         */
+        function displayFileList(files) {
+            if (!files || files.length === 0) {
+                filesListElement.innerHTML = '<li style="padding: 15px; text-align: center; color: #666; font-size: 0.8rem;">Файлы не найдены</li>';
+                return;
+            }
+            
+            // Группируем файлы по каталогам
+            const filesByDirectory = {};
+            files.forEach(file => {
+                const dir = file.directory || '(корневой каталог)';
+                if (!filesByDirectory[dir]) {
+                    filesByDirectory[dir] = [];
+                }
+                filesByDirectory[dir].push(file);
+            });
+            
+            // Сортируем каталоги
+            const directories = Object.keys(filesByDirectory).sort();
+            let html = '';
+            
+            directories.forEach(dir => {
+                // Проверяем, свернут ли каталог
+                const isCollapsed = collapsedDirectories.has(dir);
+                
+                // Добавляем заголовок каталога
+                if (dir !== '(корневой каталог)') {
+                    html += `
+                        <li class="directory-item" data-dir="${dir}">
+                            <span>📁 ${dir}/</span>
+                            <button class="directory-toggle" title="${isCollapsed ? 'Развернуть' : 'Свернуть'}">
+                                ${isCollapsed ? '▶' : '▼'}
+                            </button>
+                        </li>
+                        <div class="directory-files" ${isCollapsed ? 'style="max-height: 0;"' : ''}>
+                    `;
+                }
+                
+                const dirFiles = filesByDirectory[dir];
+                dirFiles.forEach(file => {
+                    const fileDate = file.modified ? new Date(file.modified).toLocaleDateString() : 'неизв.';
+                    const isActive = currentFilePath === file.fullPath ? 'active' : '';
+                    
+                    html += `
+                        <li class="file-item ${isActive}" data-path="${file.fullPath}">
+                            <div class="file-info">
+                                <div class="file-name">${escapeHtml(file.name)}</div>
+                                <div class="file-meta">
+                                    <span>${formatFileSize(file.sizeBytes)}</span>
+                                    <span>${escapeHtml(fileDate)}</span>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="download-btn" title="Скачать файл" data-filename="${file.fullPath}">
+                                    Скачать
+                                </button>
+                            </div>
+                        </li>
+                    `;
+                });
+                
+                if (dir !== '(корневой каталог)') {
+                    html += `</div>`;
+                }
+            });
+            
+            filesListElement.innerHTML = html;
+            
+            // Добавляем обработчики событий
+            document.querySelectorAll('.directory-toggle').forEach(btn => {
+                btn.addEventListener('click', handleDirectoryToggle);
+            });
+            
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.addEventListener('click', handleFileClick);
+            });
+            
+            document.querySelectorAll('.download-btn').forEach(btn => {
+                btn.addEventListener('click', handleDownloadClick);
+            });
+        }
+        
+        /**
+         * Обработчик переключения состояния каталога
+         * @param {Event} e - Событие клика
+         */
+        function handleDirectoryToggle(e) {
+            if (isFileLoading) return;
+            
+            e.stopPropagation();
+            const dirItem = e.target.closest('.directory-item');
+            const dirName = dirItem.dataset.dir;
+            const dirFilesElement = dirItem.nextElementSibling;
+            
+            if (collapsedDirectories.has(dirName)) {
+                collapsedDirectories.delete(dirName);
+                dirFilesElement.style.maxHeight = dirFilesElement.scrollHeight + 'px';
+                setTimeout(() => {
+                    dirFilesElement.style.maxHeight = 'none';
+                }, 300);
+                e.target.textContent = '▼';
+                e.target.title = 'Свернуть';
+            } else {
+                collapsedDirectories.add(dirName);
+                dirFilesElement.style.maxHeight = dirFilesElement.scrollHeight + 'px';
+                setTimeout(() => {
+                    dirFilesElement.style.maxHeight = '0';
+                }, 10);
+                e.target.textContent = '▶';
+                e.target.title = 'Развернуть';
+            }
+            
+            saveCollapsedDirectories();
+        }
+        
+        /**
+         * Обработчик выбора файла
+         * @param {Event} e - Событие клика
+         */
+        function handleFileClick(e) {
+            if (e.target.classList.contains('download-btn') || isFileLoading) {
+                return;
+            }
+            
+            // Debounce кликов
+            const now = Date.now();
+            if (now - lastFileClickTime < FILE_CLICK_DEBOUNCE) {
+                return;
+            }
+            lastFileClickTime = now;
+            
+            const fileItem = e.currentTarget;
+            const filePath = fileItem.dataset.path;
+            
+            // Находим информацию о файле
+            const fileInfo = fileListData.find(f => f.fullPath === filePath);
+            if (!fileInfo) return;
+            
+            // Снимаем выделение со всех файлов
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Выделяем текущий файл
+            fileItem.classList.add('active');
+            
+            // Загружаем файл
+            selectFile(fileInfo);
+        }
+        
+        /**
+         * Обработчик скачивания файла
+         * @param {Event} e - Событие клика
+         */
+        function handleDownloadClick(e) {
+            e.stopPropagation();
+            if (isFileLoading) return;
+            
+            const filePath = e.currentTarget.dataset.filename;
+            const fileInfo = fileListData.find(f => f.fullPath === filePath);
+            if (fileInfo) {
+                downloadFile(fileInfo);
+            }
+        }
+        
+        /**
+         * Сохранить состояние свернутых каталогов в localStorage
+         */
+        function saveCollapsedDirectories() {
+            const directoriesArray = Array.from(collapsedDirectories);
+            localStorage.setItem('collapsedDirectories', JSON.stringify(directoriesArray));
+        }
+        
+        /**
+         * Восстановить состояние свернутых каталогов из localStorage
+         */
+        function restoreCollapsedDirectories() {
+            try {
+                const saved = localStorage.getItem('collapsedDirectories');
+                if (saved) {
+                    const directories = JSON.parse(saved);
+                    collapsedDirectories = new Set(directories);
+                }
+            } catch (e) {
+                console.error('Ошибка восстановления свернутых каталогов:', e);
+                collapsedDirectories = new Set();
+            }
+        }
+        
+        /**
+         * Выбор файла для просмотра
+         * @param {Object} fileInfo - Информация о файле
+         */
+        function selectFile(fileInfo) {
+            // Если автообновление включено, выключаем его при переключении файлов
+            if (autoRefreshEnabled) {
+                disableAutoRefresh();
+            }
+            
+            loadFileContent(fileInfo);
+        }
+        
+        // ============================================================================
+        // ЗАГРУЗКА И ОТОБРАЖЕНИЕ ЛОГОВ
+        // ============================================================================
+        
+        /**
+         * Загрузка содержимого файла логов
+         * @param {Object} fileInfo - Информация о файле
+         * @returns {Promise<void>}
+         */
+        async function loadFileContent(fileInfo) {
+            currentFile = fileInfo.name;
+            currentFilePath = fileInfo.fullPath;
+            currentFileSize = fileInfo.sizeBytes;
+            selectedFileNameElement.textContent = `Файл: ${fileInfo.name}`;
+            
+            // Блокируем интерфейс во время загрузки
+            setInterfaceLoading(true);
+            
+            try {
+                const response = await fetch(`${SERVER_BASE_URL}/api/file?path=${encodeURIComponent(fileInfo.fullPath)}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Ошибка сервера: ${response.status} - ${errorText}`);
+                }
+                
+                const content = await response.text();
+                displayFileContent(content, fileInfo);
+                
+                // Автоматическая прокрутка к концу файла
+                setTimeout(() => scrollToBottom(), SCROLL_TO_END_DELAY);
+                
+            } catch (error) {
+                console.error('Ошибка загрузки файла:', error);
+                logContentElement.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <h3>Ошибка загрузки файла</h3>
+                        <p>${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+                statsInfoElement.textContent = `Ошибка загрузки: ${fileInfo.name}`;
+            } finally {
+                // Разблокируем интерфейс после загрузки
+                setInterfaceLoading(false);
+                updateNavigationButtons(true);
+            }
+        }
+        
+        /**
+         * Отображение содержимого файла логов
+         * @param {string} content - Содержимое файла
+         * @param {Object} fileInfo - Информация о файле
+         */
+        function displayFileContent(content, fileInfo) {
+            const lines = content.split('\n');
+            let html = '';
+            
+            // Проверяем первое сообщение от сервера (предупреждение об обрезке)
+            let hasPreviewWarning = false;
+            let contentStartIndex = 0;
+            
+            if (lines[0] && lines[0].includes('⚠️')) {
+                hasPreviewWarning = true;
+                html += `<div class="preview-warning">${escapeHtml(lines[0])}</div>`;
+                contentStartIndex = 1;
+            }
+            
+            // Отображаем все строки, которые вернул сервер
+            for (let i = contentStartIndex; i < lines.length; i++) {
+                const lineNumber = i + 1;
+                const escapedLine = escapeHtml(lines[i]);
+                const coloredLine = highlightLogLevels(escapedLine);
+                
+                html += `<div class="log-line" data-line="${lineNumber}">
+                    <div class="line-number">${lineNumber}</div>
+                    <div class="line-content">${coloredLine}</div>
+                </div>`;
+            }
+            
+            logContentElement.innerHTML = html;
+            
+            // Добавляем обработчики кликов на строки
+            document.querySelectorAll('.log-line').forEach(lineElement => {
+                lineElement.addEventListener('click', (e) => {
+                    const lineNumber = parseInt(lineElement.dataset.line);
+                    const lineContent = lines[lineNumber - 1] || '';
+                    showLineDialog(lineNumber, lineContent);
+                });
+            });
+            
+            // Обновляем статистику
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            const sizeStr = formatFileSize(fileInfo.sizeBytes);
+            const previewSizeMB = PREVIEW_SIZE_MB;
+            
+            statsInfoElement.textContent = `Файл: ${currentFile} (${sizeStr}) | Строк: ${(lines.length - contentStartIndex).toLocaleString()} | Лимит предпросмотра: ${previewSizeMB} МБ | Кодировка: ${CURRENT_ENCODING} | Обновлено: ${timeStr}`;
+        }
+        
+        /**
+         * Подсветка уровней логирования в тексте
+         * @param {string} content - Текст строки лога
+         * @returns {string} Текст с HTML-разметкой для подсветки
+         */
+        function highlightLogLevels(content) {
+            return content.replace(/(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)/gi, (match) => {
+                let color = '#b5cea8';
+                const upper = match.toUpperCase();
+                switch(upper) {
+                    case 'TRACE': color = '#9cdcfe'; break;
+                    case 'DEBUG': color = '#4ec9b0'; break;
+                    case 'INFO': color = '#b5cea8'; break;
+                    case 'WARN':
+                    case 'WARNING': color = '#ffd700'; break;
+                    case 'ERROR': color = '#f48771'; break;
+                    case 'FATAL': color = '#ff0000'; break;
+                }
+                return `<span style="color: ${color}; font-weight: bold;">${match}</span>`;
+            });
+        }
+        
+        /**
+         * Скачивание файла
+         * @param {Object} fileInfo - Информация о файле
+         */
+        async function downloadFile(fileInfo) {
+            try {
+                // Открываем файл в новом окне для скачивания
+                window.open(`${SERVER_BASE_URL}/api/download?path=${encodeURIComponent(fileInfo.fullPath)}`, '_blank');
+                
+                // Визуальное подтверждение
+                const originalText = statsInfoElement.textContent;
+                statsInfoElement.textContent = `Скачивание "${fileInfo.name}"...`;
+                setTimeout(() => {
+                    statsInfoElement.textContent = originalText;
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Ошибка скачивания файла:', error);
+                alert(`Ошибка скачивания: ${error.message}`);
+            }
+        }
+        
+        // ============================================================================
+        // АВТООБНОВЛЕНИЕ СОДЕРЖИМОГО ФАЙЛА
+        // ============================================================================
+        
+        /**
+         * Включение/выключение автообновления файла
+         */
+        function toggleAutoRefreshFile() {
+            if (!SERVER_CONNECTED) {
+                alert('Сервер не подключен');
+                return;
+            }
+            
+            if (!currentFilePath) {
+                alert('Сначала выберите файл для просмотра');
+                return;
+            }
+            
+            if (autoRefreshEnabled) {
+                disableAutoRefresh();
+            } else {
+                enableAutoRefresh();
+            }
+        }
+        
+        /**
+         * Включение автообновления
+         */
+        function enableAutoRefresh() {
+            const interval = parseInt(refreshIntervalInput.value) * 1000;
+            autoRefreshInterval = setInterval(autoRefreshFile, interval);
+            autoRefreshEnabled = true;
+            autoRefreshFileBtn.textContent = 'Остановить';
+            autoRefreshFileBtn.style.backgroundColor = '#d32f2f';
+            updateAutoRefreshStatus();
+        }
+        
+        /**
+         * Отключение автообновления
+         */
+        function disableAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            autoRefreshEnabled = false;
+            autoRefreshFileBtn.textContent = 'Автообновление';
+            autoRefreshFileBtn.style.backgroundColor = '';
+            updateAutoRefreshStatus();
+        }
+        
+        /**
+         * Автообновление содержимого файла
+         */
+        async function autoRefreshFile() {
+            if (!SERVER_CONNECTED || !currentFilePath || !autoRefreshEnabled) return;
+            
+            try {
+                // Находим информацию о текущем файле
+                const fileInfo = fileListData.find(f => f.fullPath === currentFilePath);
+                if (fileInfo) {
+                    await loadFileContent(fileInfo);
+                }
+            } catch (error) {
+                console.error('Ошибка автообновления:', error);
+            }
+        }
+        
+        /**
+         * Обновление статуса автообновления в интерфейсе
+         */
+        function updateAutoRefreshStatus() {
+            if (autoRefreshEnabled) {
+                const interval = refreshIntervalInput.value;
+                autoRefreshStatusElement.textContent = `Автообновление: включено (${interval} сек)`;
+                autoRefreshStatusElement.style.color = '#2e7d32';
+            } else {
+                autoRefreshStatusElement.textContent = 'Автообновление: выключено';
+                autoRefreshStatusElement.style.color = '#777';
+            }
+        }
+        
+        // ============================================================================
+        // НАВИГАЦИЯ ПО ФАЙЛУ
+        // ============================================================================
+        
+        /**
+         * Прокрутка к началу файла
+         */
+        function scrollToTop() {
+            const container = logContentElement.parentElement;
+            container.scrollTop = 0;
+        }
+        
+        /**
+         * Прокрутка к концу файла
+         */
+        function scrollToBottom() {
+            const container = logContentElement.parentElement;
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // ============================================================================
+        // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+        // ============================================================================
+        
+        /**
+         * Форматирование размера файла в читаемый вид
+         * @param {number} bytes - Размер в байтах
+         * @returns {string} Отформатированный размер
+         */
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Б';
+            const k = 1024;
+            const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        /**
+         * Экранирование HTML-специальных символов
+         * @param {string} text - Текст для экранирования
+         * @returns {string} Экранированный текст
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // ============================================================================
+        // ЗАПУСК ПРИЛОЖЕНИЯ
+        // ============================================================================
+        
+        // Инициализация приложения после загрузки DOM
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
