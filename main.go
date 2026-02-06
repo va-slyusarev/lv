@@ -27,7 +27,7 @@ import (
 var htmlTemplate string
 
 // Версия приложения
-const version = "dev"
+var version = "dev"
 
 // Структуры для API
 type FileInfo struct {
